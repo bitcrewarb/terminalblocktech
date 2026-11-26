@@ -3566,6 +3566,10 @@ function evalSingleStrategy(
   }
 }
 
+const BASE_STRATEGY_IDS: BacktestStrategyId[] = BACKTEST_STRATEGY_DEFINITIONS
+  .filter((d) => !d.id.startsWith('CMB_'))
+  .map((d) => d.id);
+
 /**
  * Evaluates all selected SMC, Price Action, Chart Pattern, S/R, and Hybrid strategies
  * on a single closed bar using strictly causal analysis slices.
@@ -3583,8 +3587,9 @@ export function evaluateStrategiesOnBar(
   }
 
   const ctx = buildBarContext(execSnap, htfSnap, bar, config);
-  for (const id of enabledIds) {
-    if (id.startsWith('CMB_')) continue;
+  for (let i = 0; i < BASE_STRATEGY_IDS.length; i++) {
+    const id = BASE_STRATEGY_IDS[i];
+    if (!enabledIds.has(id)) continue;
     const plan = evalSingleStrategy(id, ctx, config);
     if (plan) candidates.push(plan);
   }
@@ -3595,8 +3600,8 @@ export function evaluateStrategiesOnBar(
     findProtectedInvalidation,
     buildPlan,
   });
-  for (const plan of comboPlans) {
-    candidates.push(plan);
+  for (let i = 0; i < comboPlans.length; i++) {
+    candidates.push(comboPlans[i]);
   }
 
   return candidates;

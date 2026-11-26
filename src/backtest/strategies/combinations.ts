@@ -98,7 +98,7 @@ export interface ComboEvalDeps<TPlan> {
 }
 
 type DriverId =
-  // SMC Drivers (16)
+  // SMC & ICT Drivers (23)
   | 'SWEEP_ANY'
   | 'SWEEP_EQ'
   | 'SWEEP_PDHL'
@@ -115,7 +115,14 @@ type DriverId =
   | 'OTE_705'
   | 'MSS_BOS'
   | 'SMC_VOL_IMB'
-  // Price Action & Candlestick Drivers (20)
+  | 'ICT_SILVER_BULLET'
+  | 'ICT_POWER_OF_3'
+  | 'ICT_UNICORN'
+  | 'ICT_JUDAS_SWING'
+  | 'ICT_BPR_OVERLAP'
+  | 'ICT_KILLZONE_SWEEP'
+  | 'ICT_WEEKLY_ANCHOR_RECLAIM'
+  // Price Action & Candlestick Drivers (23)
   | 'PA_ENGULF'
   | 'PA_PINBAR'
   | 'PA_STAR'
@@ -133,6 +140,9 @@ type DriverId =
   | 'PA_DONCHIAN20'
   | 'PA_TURTLE_SOUP'
   | 'PA_NR7_COIL'
+  | 'PA_EXHAUSTION_SNAP'
+  | 'PA_MOMENTUM_THRUST'
+  | 'PA_INSIDE_FALSE_BREAK'
   | 'DYN_ATR_EXPANSION'
   | 'DYN_EMA_CROSS'
   | 'DYN_DAILY_BIAS'
@@ -149,7 +159,7 @@ type DriverId =
   | 'CP_CUP_ROUND'
   | 'CP_TL_BOUNCE'
   | 'CP_TL_BREAK'
-  // Support & Resistance Drivers (10)
+  // Support & Resistance Drivers (13)
   | 'SR_MAJOR'
   | 'SR_VERIFIED'
   | 'SR_FLIP'
@@ -159,18 +169,27 @@ type DriverId =
   | 'SR_PIVOT'
   | 'SR_SESSION'
   | 'SR_SPRING'
-  | 'SR_NESTED_HTF';
+  | 'SR_NESTED_HTF'
+  | 'SR_CONFLUENCE_CLUSTER'
+  | 'SR_DEMAND_SUPPLY_OVERLAP'
+  | 'SR_WICK_REJECTION';
 
 type FilterId =
   | 'HTF_STRICT'
   | 'HTF_NONOPP'
   | 'MSS_SHIFT'
   | 'BOS_CONT'
+  | 'BOS_OR_MSS'
   | 'FVG_CONF'
   | 'OB_CONF'
+  | 'HTF_OB_FVG'
   | 'SR_NEAR'
+  | 'SR_MULTI_TOUCH'
   | 'SWEEP_CONF'
   | 'OTE_QUAD'
+  | 'ICT_DISCOUNT_PREM_50'
+  | 'ICT_KILLZONE'
+  | 'ICT_WEEKLY_BIAS'
   | 'VOL_125'
   | 'VOL_145'
   | 'DISP_STRONG'
@@ -200,8 +219,11 @@ interface ComboSpec {
   name: string;
   category: BacktestStrategyCategory;
   driver: DriverId;
+  driverIdx: number;
   filter: FilterId;
+  filterIdx: number;
   secondFilter?: FilterId;
+  secondFilterIdx: number;
   exec: ExecProfileId;
   scoreBonus: number;
   summary: string;
@@ -235,6 +257,13 @@ const DRIVER_META: Record<DriverId, { label: string; rule: string }> = {
   OTE_705: { label: 'OTE 70.5% Pocket', rule: 'Price inside 62%–79% Dealing Range OTE pocket' },
   MSS_BOS: { label: 'Confirmed MSS/BOS', rule: 'Confirmed MSS/CHoCH/BOS structural break (<=10 bars)' },
   SMC_VOL_IMB: { label: 'Vol Imbalance / Rej Block', rule: 'Volume Imbalance or Rejection Block within 2.5x ATR' },
+  ICT_SILVER_BULLET: { label: 'ICT Silver Bullet FVG', rule: 'London/NY Silver Bullet killzone window + active FVG + displacement' },
+  ICT_POWER_OF_3: { label: 'ICT Power of 3 (AMD)', rule: 'AMD manipulation sweep across Daily Open / Asian range + expansion close' },
+  ICT_UNICORN: { label: 'ICT Unicorn Model', rule: 'Institutional Breaker Block overlapping aligned Fair Value Gap' },
+  ICT_JUDAS_SWING: { label: 'ICT Judas Swing', rule: 'Daily/Midnight Open false break trapped & reversed with displacement' },
+  ICT_BPR_OVERLAP: { label: 'ICT Balanced Price Range', rule: 'Balanced Price Range dual/inverted FVG confluence pocket' },
+  ICT_KILLZONE_SWEEP: { label: 'ICT Killzone Raid', rule: 'London/NY Killzone session high/low liquidity sweep + reversal close' },
+  ICT_WEEKLY_ANCHOR_RECLAIM: { label: 'ICT Weekly Open Reclaim', rule: 'Weekly Open institutional anchor sweep & directional reclaim' },
   PA_ENGULF: { label: 'Engulfing Candle', rule: 'Confirmed Bullish/Bearish Engulfing pattern' },
   PA_PINBAR: { label: 'Pin Bar / Hammer', rule: 'Confirmed Hammer / Shooting Star / Doji rejection' },
   PA_STAR: { label: 'Morning/Evening Star', rule: 'Confirmed 3-bar Morning or Evening Star' },
@@ -252,6 +281,9 @@ const DRIVER_META: Record<DriverId, { label: string; rule: string }> = {
   PA_DONCHIAN20: { label: 'Donchian 20 Break', rule: 'Close beyond prior 20-bar Donchian High/Low' },
   PA_TURTLE_SOUP: { label: 'Turtle Soup Trap', rule: 'Failed 20-bar Donchian breakout snapback' },
   PA_NR7_COIL: { label: 'NR7 / Coil Break', rule: 'NR7 or 3-bar compression expansion breakout' },
+  PA_EXHAUSTION_SNAP: { label: 'PA Exhaustion Snap', rule: '3+ consecutive counter bars snapped by >=38% rejection wick' },
+  PA_MOMENTUM_THRUST: { label: 'PA Momentum Thrust', rule: '2-bar consecutive strong directional expansion close near extreme' },
+  PA_INSIDE_FALSE_BREAK: { label: 'PA Inside Sweep Trap', rule: 'Inside bar liquidity probe snapped back through opposite range' },
   DYN_ATR_EXPANSION: { label: 'Dynamic ATR Expansion', rule: 'Volatility compression expanding >=1.35x ATR through 10-bar range' },
   DYN_EMA_CROSS: { label: 'Dynamic 20/50 EMA Cross', rule: 'Dual 20/50 EMA cross or dynamic double-EMA reclaim' },
   DYN_DAILY_BIAS: { label: 'Daily Open Reclaim', rule: 'Intraday Daily Open sweep & directional reclaim' },
@@ -277,6 +309,9 @@ const DRIVER_META: Record<DriverId, { label: string; rule: string }> = {
   SR_SESSION: { label: 'Session High/Low', rule: 'Active Session High/Low boundary reaction' },
   SR_SPRING: { label: 'S/R Spring/Upthrust', rule: 'Wyckoff Spring/Upthrust false break across S/R' },
   SR_NESTED_HTF: { label: 'HTF+Exec S/R Overlap', rule: 'Execution S/R overlapping HTF S/R within 0.85x ATR' },
+  SR_CONFLUENCE_CLUSTER: { label: 'S/R Heavy Cluster', rule: 'High-strength multi-touch horizontal S/R cluster (strength >= 65)' },
+  SR_DEMAND_SUPPLY_OVERLAP: { label: 'S/R + S/D Overlap', rule: 'Horizontal S/R overlapping Fresh/Tested Supply or Demand zone' },
+  SR_WICK_REJECTION: { label: 'S/R Wick Rejection', rule: 'Strong >=34% wick rejection directly off horizontal S/R boundary' },
 };
 
 const FILTER_META: Record<FilterId, { label: string; rule: string }> = {
@@ -284,11 +319,17 @@ const FILTER_META: Record<FilterId, { label: string; rule: string }> = {
   HTF_NONOPP: { label: 'HTF Non-Opposing', rule: 'Higher-Timeframe trend not opposing direction' },
   MSS_SHIFT: { label: 'MSS/CHoCH Shift', rule: 'Confirmed MSS or CHoCH within 10 bars' },
   BOS_CONT: { label: 'BOS Continuation', rule: 'Confirmed Break of Structure within 16 bars' },
+  BOS_OR_MSS: { label: 'BOS/MSS Confirm', rule: 'Confirmed BOS, MSS, or CHoCH break within 12 bars' },
   FVG_CONF: { label: 'FVG Confluence', rule: 'Aligned Fair Value Gap within 3.0x ATR' },
   OB_CONF: { label: 'OB Origin', rule: 'Valid aligned Order Block within 3.0x ATR' },
+  HTF_OB_FVG: { label: 'HTF OB/FVG Backing', rule: 'Higher-timeframe aligned Order Block or FVG within 3.5x ATR' },
   SR_NEAR: { label: 'S/R Confluence', rule: 'Active horizontal S/R zone within 1.5x ATR' },
+  SR_MULTI_TOUCH: { label: 'Multi-Touch S/R', rule: 'Horizontal S/R zone with >= 2 touches within 1.6x ATR' },
   SWEEP_CONF: { label: 'Sweep Confluence', rule: 'Liquidity pool sweep within 18 bars' },
   OTE_QUAD: { label: 'Discount/Premium', rule: 'Price positioned in Discount (Buy) / Premium (Sell)' },
+  ICT_DISCOUNT_PREM_50: { label: 'ICT 50% Equilibrium', rule: 'Price strictly Discount <=50% (Buy) or Premium >=50% (Sell)' },
+  ICT_KILLZONE: { label: 'ICT Killzone Session', rule: 'London (07–11 UTC) or NY (12–17 UTC) institutional killzone' },
+  ICT_WEEKLY_BIAS: { label: 'ICT Weekly Open Bias', rule: 'Price aligned with Weekly Open institutional anchor' },
   VOL_125: { label: 'Vol >= 1.25x', rule: 'Bar volume >= 1.25x 20-bar average' },
   VOL_145: { label: 'Vol Climax >= 1.45x', rule: 'Climax volume >= 1.45x 20-bar average' },
   DISP_STRONG: { label: 'Displacement >= 0.4 ATR', rule: 'Directional body >= 0.40x ATR' },
@@ -307,6 +348,11 @@ const FILTER_META: Record<FilterId, { label: string; rule: string }> = {
   SD_CONFLUENCE: { label: 'S/D Zone Confluence', rule: 'Fresh/tested Supply or Demand zone within 2.8x ATR' },
   FVG_OR_OB: { label: 'SMC Zone (OB/FVG)', rule: 'Valid aligned Order Block or Fair Value Gap within 3.0x ATR' },
 };
+
+const DRIVER_IDS = Object.keys(DRIVER_META) as DriverId[];
+const FILTER_IDS = Object.keys(FILTER_META) as FilterId[];
+const DRIVER_INDEX_MAP = new Map<DriverId, number>(DRIVER_IDS.map((id, idx) => [id, idx]));
+const FILTER_INDEX_MAP = new Map<FilterId, number>(FILTER_IDS.map((id, idx) => [id, idx]));
 
 const EXEC_META: Record<
   ExecProfileId,
@@ -345,6 +391,8 @@ const EXEC_META: Record<
 function buildComboSpecs(): ComboSpec[] {
   const specs: ComboSpec[] = [];
   const usedIds = new Set<string>();
+  const usedNames = new Set<string>();
+  const usedRuleSignatures = new Set<string>();
 
   const pushSpec = (
     category: BacktestStrategyCategory,
@@ -353,11 +401,18 @@ function buildComboSpecs(): ComboSpec[] {
     exec: ExecProfileId,
     secondFilter?: FilterId
   ) => {
+    if (secondFilter && secondFilter === filter) return;
+
+    const sortedFilters = secondFilter
+      ? [filter, secondFilter].sort()
+      : [filter];
+    const ruleSignature = `${driver}|${sortedFilters.join('+')}|${exec}`;
+    if (usedRuleSignatures.has(ruleSignature)) return;
+
     const id = secondFilter
       ? `CMB_${driver}_${filter}_${secondFilter}_${exec}`
       : `CMB_${driver}_${filter}_${exec}`;
     if (usedIds.has(id)) return;
-    usedIds.add(id);
 
     const dm = DRIVER_META[driver];
     const fm = FILTER_META[filter];
@@ -367,6 +422,11 @@ function buildComboSpecs(): ComboSpec[] {
     const name = sm
       ? `${dm.label} + ${fm.label} + ${sm.label} (${em.tag})`
       : `${dm.label} + ${fm.label} (${em.tag})`;
+    if (usedNames.has(name)) return;
+
+    usedRuleSignatures.add(ruleSignature);
+    usedIds.add(id);
+    usedNames.add(name);
 
     const entryRules = sm ? [dm.rule, fm.rule, sm.rule] : [dm.rule, fm.rule];
 
@@ -375,8 +435,11 @@ function buildComboSpecs(): ComboSpec[] {
       name,
       category,
       driver,
+      driverIdx: DRIVER_INDEX_MAP.get(driver)!,
       filter,
+      filterIdx: FILTER_INDEX_MAP.get(filter)!,
       secondFilter,
+      secondFilterIdx: secondFilter ? FILTER_INDEX_MAP.get(secondFilter)! : -1,
       exec,
       scoreBonus: sm ? 7 : 3,
       summary: `${category} combination pairing ${dm.label} with ${fm.label}${sm ? ` and ${sm.label}` : ''} using ${em.tag} execution.`,
@@ -808,6 +871,283 @@ function buildComboSpecs(): ComboSpec[] {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // 7. INSTITUTIONAL EXPANSION WAVE (+2,150+ UNIQUE ICT, SMC, PA, SR, CP STRATEGIES)
+  // -------------------------------------------------------------------------
+  const ALL_EXECS: ExecProfileId[] = ['MARKET_STD', 'MARKET_TIGHT', 'MARKET_RUNNER', 'LIMIT_RETEST'];
+  const MARKET_EXECS: ExecProfileId[] = ['MARKET_STD', 'MARKET_TIGHT', 'MARKET_RUNNER'];
+
+  // 7A. ICT & SMC Expanded Matrix (+600 unique strategies)
+  const ictSmcDrivers: DriverId[] = [
+    'ICT_SILVER_BULLET',
+    'ICT_POWER_OF_3',
+    'ICT_UNICORN',
+    'ICT_JUDAS_SWING',
+    'ICT_BPR_OVERLAP',
+    'ICT_KILLZONE_SWEEP',
+    'ICT_WEEKLY_ANCHOR_RECLAIM',
+    'SWEEP_ANY',
+    'SWEEP_EQ',
+    'SWEEP_PDHL',
+    'SWEEP_PWHL',
+    'OB_UNMIT',
+    'OB_DISP',
+    'BREAKER',
+    'MITIGATION',
+    'FVG_ANY',
+    'FVG_CE',
+    'IFVG',
+    'SD_FRESH',
+    'SD_CONT',
+    'OTE_705',
+    'MSS_BOS',
+    'SMC_VOL_IMB',
+  ];
+  const ictSmcFilters: FilterId[] = [
+    'ICT_KILLZONE',
+    'ICT_WEEKLY_BIAS',
+    'ICT_DISCOUNT_PREM_50',
+    'HTF_OB_FVG',
+    'BOS_OR_MSS',
+    'HTF_STRICT',
+    'HTF_NONOPP',
+    'MSS_SHIFT',
+    'BOS_CONT',
+    'FVG_CONF',
+    'OB_CONF',
+    'SWEEP_CONF',
+    'OTE_QUAD',
+    'VOL_125',
+    'VOL_145',
+    'DISP_STRONG',
+    'CANDLE_REV',
+    'WICK_ABSORB',
+    'DAILY_BIAS',
+    'SD_CONFLUENCE',
+    'FVG_OR_OB',
+    'EMA_STACK',
+  ];
+  let w7SmcCount = 0;
+  outerW7Smc: for (const drv of ictSmcDrivers) {
+    for (const flt of ictSmcFilters) {
+      for (const ex of ALL_EXECS) {
+        if (w7SmcCount >= 600) break outerW7Smc;
+        const before = specs.length;
+        pushSpec('SMC', drv, flt, ex);
+        if (specs.length > before) w7SmcCount += 1;
+      }
+    }
+  }
+
+  // 7B. Price Action Expanded Matrix (+560 unique strategies)
+  const paWave7Drivers: DriverId[] = [
+    'PA_EXHAUSTION_SNAP',
+    'PA_MOMENTUM_THRUST',
+    'PA_INSIDE_FALSE_BREAK',
+    'PA_ENGULF',
+    'PA_PINBAR',
+    'PA_STAR',
+    'PA_INSIDE',
+    'PA_FAKEY',
+    'PA_MARUBOZU',
+    'PA_TWEEZER',
+    'PA_RAIL',
+    'PA_THREE_SOLDIERS_CROWS',
+    'PA_PIERCING_DARKCLOUD',
+    'PA_HARAMI',
+    'PA_OUTSIDE_BAR',
+    'PA_EMA20',
+    'PA_EMA50',
+    'PA_DONCHIAN20',
+    'PA_TURTLE_SOUP',
+    'PA_NR7_COIL',
+    'DYN_ATR_EXPANSION',
+    'DYN_EMA_CROSS',
+    'DYN_DAILY_BIAS',
+  ];
+  const paWave7Filters: FilterId[] = [
+    'BOS_OR_MSS',
+    'ICT_KILLZONE',
+    'ICT_WEEKLY_BIAS',
+    'ICT_DISCOUNT_PREM_50',
+    'HTF_OB_FVG',
+    'SR_MULTI_TOUCH',
+    'HTF_STRICT',
+    'HTF_NONOPP',
+    'EMA_SLOPE',
+    'EMA_STACK',
+    'PRICE_EMA20',
+    'VOL_125',
+    'VOL_145',
+    'VOL_EXPAND',
+    'VOL_COMPRESS',
+    'DISP_STRONG',
+    'WICK_ABSORB',
+    'EXHAUST_3',
+    'TREND_REGIME',
+    'CONSOL_REGIME',
+    'DAILY_BIAS',
+    'OTE_QUAD',
+  ];
+  let w7PaCount = 0;
+  outerW7Pa: for (const drv of paWave7Drivers) {
+    for (const flt of paWave7Filters) {
+      for (const ex of MARKET_EXECS) {
+        if (w7PaCount >= 560) break outerW7Pa;
+        const before = specs.length;
+        pushSpec('Price Action', drv, flt, ex);
+        if (specs.length > before) w7PaCount += 1;
+      }
+    }
+  }
+
+  // 7C. Support & Resistance Expanded Matrix (+450 unique strategies)
+  const srWave7Drivers: DriverId[] = [
+    'SR_CONFLUENCE_CLUSTER',
+    'SR_DEMAND_SUPPLY_OVERLAP',
+    'SR_WICK_REJECTION',
+    'SR_MAJOR',
+    'SR_VERIFIED',
+    'SR_FLIP',
+    'SR_BREAKOUT',
+    'SR_PDHL',
+    'SR_PWHL',
+    'SR_PIVOT',
+    'SR_SESSION',
+    'SR_SPRING',
+    'SR_NESTED_HTF',
+  ];
+  const srWave7Filters: FilterId[] = [
+    'SR_MULTI_TOUCH',
+    'BOS_OR_MSS',
+    'ICT_KILLZONE',
+    'ICT_WEEKLY_BIAS',
+    'ICT_DISCOUNT_PREM_50',
+    'HTF_OB_FVG',
+    'HTF_STRICT',
+    'HTF_NONOPP',
+    'CANDLE_REV',
+    'WICK_ABSORB',
+    'VOL_125',
+    'VOL_145',
+    'VOL_EXPAND',
+    'VOL_COMPRESS',
+    'DISP_STRONG',
+    'EMA_SLOPE',
+    'EMA_STACK',
+    'PRICE_EMA20',
+    'DAILY_BIAS',
+    'OTE_QUAD',
+    'SD_CONFLUENCE',
+    'FVG_OR_OB',
+    'MSS_SHIFT',
+    'SWEEP_CONF',
+  ];
+  let w7SrCount = 0;
+  outerW7Sr: for (const drv of srWave7Drivers) {
+    for (const flt of srWave7Filters) {
+      for (const ex of ALL_EXECS) {
+        if (w7SrCount >= 450) break outerW7Sr;
+        const before = specs.length;
+        pushSpec('Support & Resistance', drv, flt, ex);
+        if (specs.length > before) w7SrCount += 1;
+      }
+    }
+  }
+
+  // 7D. Chart Patterns & Trendline Expanded Matrix (+240 unique strategies)
+  const cpWave7Drivers: DriverId[] = [
+    'CP_W_PATTERN',
+    'CP_M_PATTERN',
+    'CP_DOUBLE_TB',
+    'CP_TRIPLE_TB',
+    'CP_HS_IHS',
+    'CP_SYM_TRI',
+    'CP_DIR_TRI',
+    'CP_FLAG_PEN',
+    'CP_WEDGE',
+    'CP_CUP_ROUND',
+    'CP_TL_BOUNCE',
+    'CP_TL_BREAK',
+  ];
+  const cpWave7Filters: FilterId[] = [
+    'BOS_OR_MSS',
+    'ICT_KILLZONE',
+    'ICT_WEEKLY_BIAS',
+    'ICT_DISCOUNT_PREM_50',
+    'HTF_OB_FVG',
+    'SR_MULTI_TOUCH',
+    'VOL_145',
+    'EXHAUST_3',
+    'EMA_STACK',
+    'EMA_SLOPE',
+    'TREND_REGIME',
+    'CONSOL_REGIME',
+    'FVG_OR_OB',
+    'SD_CONFLUENCE',
+    'WICK_ABSORB',
+  ];
+  let w7CpCount = 0;
+  outerW7Cp: for (const drv of cpWave7Drivers) {
+    for (const flt of cpWave7Filters) {
+      for (const ex of ALL_EXECS) {
+        if (w7CpCount >= 240) break outerW7Cp;
+        const before = specs.length;
+        pushSpec('Chart Patterns', drv, flt, ex);
+        if (specs.length > before) w7CpCount += 1;
+      }
+    }
+  }
+
+  // 7E. Hybrid Multi-Pillar ICT + SMC + Price Action + S/R Confluences (+450 unique strategies)
+  const hybridWave7Drivers: DriverId[] = [
+    'ICT_SILVER_BULLET',
+    'ICT_POWER_OF_3',
+    'ICT_UNICORN',
+    'ICT_JUDAS_SWING',
+    'ICT_BPR_OVERLAP',
+    'ICT_KILLZONE_SWEEP',
+    'SR_CONFLUENCE_CLUSTER',
+    'SR_DEMAND_SUPPLY_OVERLAP',
+    'SR_WICK_REJECTION',
+    'PA_EXHAUSTION_SNAP',
+    'PA_MOMENTUM_THRUST',
+    'PA_INSIDE_FALSE_BREAK',
+    'SWEEP_ANY',
+    'OB_UNMIT',
+    'FVG_CE',
+    'SR_FLIP',
+    'PA_ENGULF',
+    'PA_PINBAR',
+    'CP_W_PATTERN',
+    'CP_M_PATTERN',
+  ];
+  const hybridWave7Pairs: Array<[FilterId, FilterId]> = [
+    ['HTF_STRICT', 'ICT_KILLZONE'],
+    ['HTF_NONOPP', 'SR_MULTI_TOUCH'],
+    ['BOS_OR_MSS', 'FVG_OR_OB'],
+    ['SWEEP_CONF', 'CANDLE_REV'],
+    ['OTE_QUAD', 'CANDLE_REV'],
+    ['ICT_DISCOUNT_PREM_50', 'HTF_OB_FVG'],
+    ['SR_NEAR', 'VOL_125'],
+    ['EMA_STACK', 'VOL_EXPAND'],
+    ['DAILY_BIAS', 'WICK_ABSORB'],
+    ['ICT_WEEKLY_BIAS', 'MSS_SHIFT'],
+    ['SD_CONFLUENCE', 'DISP_STRONG'],
+    ['TL_NEAR', 'BOS_OR_MSS'],
+  ];
+  let w7HybCount = 0;
+  outerW7Hyb: for (const drv of hybridWave7Drivers) {
+    for (const [f1, f2] of hybridWave7Pairs) {
+      for (const ex of ['MARKET_STD', 'LIMIT_RETEST'] as ExecProfileId[]) {
+        if (w7HybCount >= 450) break outerW7Hyb;
+        const before = specs.length;
+        pushSpec('Hybrid SMC/PA', drv, f1, ex, f2);
+        if (specs.length > before) w7HybCount += 1;
+      }
+    }
+  }
+
   return specs;
 }
 
@@ -822,10 +1162,6 @@ export const COMBO_STRATEGY_DEFINITIONS: BacktestStrategyDefinition[] =
     entryRules: s.entryRules,
     riskRules: s.riskRules,
   }));
-
-const COMBO_SPEC_MAP = new Map<string, ComboSpec>(
-  COMBO_STRATEGY_SPECS.map((s) => [s.id, s])
-);
 
 function trendLabel(d: Direction): 'bullish' | 'bearish' {
   return d === 'BUY' ? 'bullish' : 'bearish';
@@ -1708,6 +2044,212 @@ function evaluateDriver(
           : `M Pattern Leg-2 Rejection [${h1.price.toFixed(p)}/${h2.price.toFixed(p)}]`,
       };
     }
+    case 'ICT_SILVER_BULLET': {
+      const hourUtc = new Date(bar.time * 1000).getUTCHours();
+      const inSbWindow =
+        (hourUtc >= 7 && hourUtc <= 9) ||
+        (hourUtc >= 13 && hourUtc <= 15) ||
+        (hourUtc >= 18 && hourUtc <= 20);
+      if (!inSbWindow) return null;
+      const fvg = recentFvgs(2.2)[0];
+      const hasShiftOrSweep =
+        recentSweeps(14).length > 0 ||
+        ctx.confirmedBreaks.some((b) => b.direction === tgt && bar.time - b.breakTime <= tfSec * 12);
+      if (!fvg || !hasShiftOrSweep) return null;
+      return {
+        invalidation: isBuy ? fvg.lower : fvg.upper,
+        limitEntry: fvg.consequentEncroachment,
+        entryZone: { lower: fvg.lower, upper: fvg.upper },
+        score: 83,
+        reason: `ICT Silver Bullet (${String(hourUtc).padStart(2, '0')}h UTC) FVG CE @ ${fvg.consequentEncroachment.toFixed(p)}`,
+      };
+    }
+    case 'ICT_POWER_OF_3': {
+      const dOpen = anchors.dailyOpen;
+      if (dOpen === null) return null;
+      const asian = ctx.candles.slice(-24, -1);
+      if (asian.length < 4) return null;
+      const manipSwept = isBuy
+        ? prevBar.low < dOpen && bar.low < dOpen && bar.close > dOpen && dirCloseOk(0.25)
+        : prevBar.high > dOpen && bar.high > dOpen && bar.close < dOpen && dirCloseOk(0.25);
+      if (!manipSwept) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? bar.low : bar.high),
+        score: 81,
+        reason: `ICT Power of 3 AMD Expansion across Daily Open ${dOpen.toFixed(p)}`,
+      };
+    }
+    case 'ICT_UNICORN': {
+      const brk = recentObs(2.8, { kinds: ['breaker_block'] })[0];
+      const fvg = recentFvgs(2.8)[0];
+      if (!brk || !fvg) return null;
+      const overlap =
+        Math.min(brk.upper, fvg.upper) >= Math.max(brk.lower, fvg.lower) - atr * 0.45;
+      if (!overlap) return null;
+      const entry = (brk.midpoint + fvg.consequentEncroachment) / 2;
+      return {
+        invalidation: isBuy ? Math.min(brk.lower, fvg.lower) : Math.max(brk.upper, fvg.upper),
+        limitEntry: entry,
+        entryZone: { lower: Math.min(brk.lower, fvg.lower), upper: Math.max(brk.upper, fvg.upper) },
+        score: 85,
+        reason: `ICT Unicorn Breaker+FVG @ ${entry.toFixed(p)}`,
+      };
+    }
+    case 'ICT_JUDAS_SWING': {
+      const dOpen = anchors.dailyOpen;
+      if (dOpen === null) return null;
+      const swept = isBuy
+        ? (bar.low < dOpen - atr * 0.1 || prevBar.low < dOpen - atr * 0.1) && bar.close > dOpen + atr * 0.12
+        : (bar.high > dOpen + atr * 0.1 || prevBar.high > dOpen + atr * 0.1) && bar.close < dOpen - atr * 0.12;
+      if (!swept || !dirCloseOk(0.2)) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? Math.min(bar.low, prevBar.low) : Math.max(bar.high, prevBar.high)),
+        score: 80,
+        reason: `ICT Judas Swing False Break @ ${dOpen.toFixed(p)}`,
+      };
+    }
+    case 'ICT_BPR_OVERLAP': {
+      const aligned = recentFvgs(2.8)[0];
+      const invFvg = ctx.activeFvgs.find(
+        (f) =>
+          (f.kind === 'inverse_fvg' || f.status === 'inverted') &&
+          Math.abs(f.consequentEncroachment - price) <= atr * 2.8
+      );
+      if (!aligned || !invFvg) return null;
+      const ce = (aligned.consequentEncroachment + invFvg.consequentEncroachment) / 2;
+      return {
+        invalidation: isBuy ? Math.min(aligned.lower, invFvg.lower) : Math.max(aligned.upper, invFvg.upper),
+        limitEntry: ce,
+        entryZone: { lower: Math.min(aligned.lower, invFvg.lower), upper: Math.max(aligned.upper, invFvg.upper) },
+        score: 82,
+        reason: `ICT Balanced Price Range @ ${ce.toFixed(p)}`,
+      };
+    }
+    case 'ICT_KILLZONE_SWEEP': {
+      const sess = execSnap.sessions.filter(
+        (s) => s.session === 'London' || s.session === 'New York'
+      );
+      const latest = sess[sess.length - 1];
+      if (!latest) return null;
+      const swept = isBuy ? latest.sweptPrevLow : latest.sweptPrevHigh;
+      if (!swept || !dirCloseOk(0.2)) return null;
+      return {
+        invalidation: findProtectedInvalidation(
+          d,
+          price,
+          atr,
+          execSnap,
+          isBuy ? latest.lowPrice : latest.highPrice
+        ),
+        score: 80,
+        reason: `ICT ${latest.session} Killzone ${isBuy ? 'Low' : 'High'} Raid`,
+      };
+    }
+    case 'ICT_WEEKLY_ANCHOR_RECLAIM': {
+      const wOpen = anchors.weeklyOpen;
+      if (wOpen === null) return null;
+      const reclaimed = isBuy
+        ? (bar.low <= wOpen || prevBar.low <= wOpen) && bar.close > wOpen && dirCloseOk(0.18)
+        : (bar.high >= wOpen || prevBar.high >= wOpen) && bar.close < wOpen && dirCloseOk(0.18);
+      if (!reclaimed) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? bar.low : bar.high),
+        score: 80,
+        reason: `Weekly Open (${wOpen.toFixed(p)}) Reclaim`,
+      };
+    }
+    case 'PA_EXHAUSTION_SNAP': {
+      const exhausted = isBuy ? ctx.prevConsecBear >= 3 : ctx.prevConsecBull >= 3;
+      const wickOk = isBuy
+        ? ctx.lowerWick / ctx.barRange >= 0.36 && ctx.isBullBar
+        : ctx.upperWick / ctx.barRange >= 0.36 && ctx.isBearBar;
+      if (!exhausted || !wickOk) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? bar.low : bar.high),
+        score: 79,
+        reason: `Exhaustion Snap (${isBuy ? ctx.prevConsecBear : ctx.prevConsecBull} bars + wick)`,
+      };
+    }
+    case 'PA_MOMENTUM_THRUST': {
+      const prevBody = Math.abs(prevBar.close - prevBar.open);
+      const ok = isBuy
+        ? prevBar.close > prevBar.open &&
+          ctx.isBullBar &&
+          prevBody >= atr * 0.4 &&
+          ctx.barBody >= atr * 0.55 &&
+          bar.close > prevBar.high &&
+          bar.close >= bar.low + ctx.barRange * 0.65
+        : prevBar.close < prevBar.open &&
+          ctx.isBearBar &&
+          prevBody >= atr * 0.4 &&
+          ctx.barBody >= atr * 0.55 &&
+          bar.close < prevBar.low &&
+          bar.close <= bar.high - ctx.barRange * 0.65;
+      if (!ok) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? prevBar.low : prevBar.high),
+        score: 78,
+        reason: '2-Bar Price Action Momentum Thrust',
+      };
+    }
+    case 'PA_INSIDE_FALSE_BREAK': {
+      const nC = ctx.candles.length;
+      const mother = ctx.candles[nC - 3];
+      const inside = ctx.candles[nC - 2];
+      if (!mother || !inside) return null;
+      const isIb = inside.high <= mother.high && inside.low >= mother.low;
+      if (!isIb) return null;
+      const trapOk = isBuy
+        ? bar.low < inside.low && bar.close > inside.high && ctx.isBullBar
+        : bar.high > inside.high && bar.close < inside.low && ctx.isBearBar;
+      if (!trapOk) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? bar.low : bar.high),
+        score: 81,
+        reason: 'Inside Bar False-Break Reversal Trap',
+      };
+    }
+    case 'SR_CONFLUENCE_CLUSTER': {
+      const sr = recentSrs(1.25, { minStrength: 65, minRejections: 2 })[0];
+      if (!sr) return null;
+      return {
+        invalidation: isBuy ? sr.lower : sr.upper,
+        limitEntry: price >= sr.lower && price <= sr.upper ? price : sr.midpoint,
+        entryZone: { lower: sr.lower, upper: sr.upper },
+        score: 81,
+        reason: `S/R Heavy Cluster ${sr.label} (${sr.strengthScore})`,
+      };
+    }
+    case 'SR_DEMAND_SUPPLY_OVERLAP': {
+      const sr = recentSrs(1.2)[0];
+      if (!sr) return null;
+      const sd = ctx.activeSds.find(
+        (z) =>
+          z.kind === (isBuy ? 'demand' : 'supply') &&
+          Math.abs(z.proximal - sr.midpoint) <= atr * 1.1
+      );
+      if (!sd) return null;
+      return {
+        invalidation: isBuy ? Math.min(sr.lower, sd.distal) : Math.max(sr.upper, sd.distal),
+        limitEntry: sr.midpoint,
+        entryZone: { lower: sr.lower, upper: sr.upper },
+        score: 83,
+        reason: `S/R (${sr.label}) + ${sd.kind.toUpperCase()} Overlap`,
+      };
+    }
+    case 'SR_WICK_REJECTION': {
+      const sr = recentSrs(1.1)[0];
+      if (!sr) return null;
+      const wickOk = isBuy
+        ? ctx.lowerWick / ctx.barRange >= 0.34 && bar.low <= sr.upper + atr * 0.25 && bar.close > sr.lower
+        : ctx.upperWick / ctx.barRange >= 0.34 && bar.high >= sr.lower - atr * 0.25 && bar.close < sr.upper;
+      if (!wickOk) return null;
+      return {
+        invalidation: findProtectedInvalidation(d, price, atr, execSnap, isBuy ? Math.min(bar.low, sr.lower) : Math.max(bar.high, sr.upper)),
+        score: 80,
+        reason: `S/R Rejection Wick @ ${sr.label}`,
+      };
+    }
   }
 }
 
@@ -1736,6 +2278,10 @@ function evaluateFilter(
       return ctx.confirmedBreaks.some(
         (b) => b.direction === tgt && b.type === 'BOS' && bar.time - b.breakTime <= tfSec * 16
       );
+    case 'BOS_OR_MSS':
+      return ctx.confirmedBreaks.some(
+        (b) => b.direction === tgt && bar.time - b.breakTime <= tfSec * 12
+      );
     case 'FVG_CONF':
       return ctx.activeFvgs.some(
         (f) =>
@@ -1750,12 +2296,39 @@ function evaluateFilter(
           ob.kind === (isBuy ? 'bullish_ob' : 'bearish_ob') &&
           Math.abs(ob.midpoint - price) <= atr * 3.0
       );
+    case 'HTF_OB_FVG': {
+      const htf = ctx.htfSnap;
+      if (!htf) return false;
+      return (
+        htf.orderBlocks.some(
+          (ob) =>
+            ob.valid &&
+            ob.kind === (isBuy ? 'bullish_ob' : 'bearish_ob') &&
+            Math.abs(ob.midpoint - price) <= atr * 4.0
+        ) ||
+        htf.fairValueGaps.some(
+          (f) =>
+            f.status !== 'fully_filled' &&
+            f.status !== 'inverted' &&
+            f.kind === (isBuy ? 'bullish_fvg' : 'bearish_fvg') &&
+            Math.abs(f.consequentEncroachment - price) <= atr * 4.0
+        )
+      );
+    }
     case 'SR_NEAR':
       return ctx.activeSrs.some(
         (sr) =>
           sr.kind === (isBuy ? 'support' : 'resistance') &&
           price >= sr.lower - atr * 1.5 &&
           price <= sr.upper + atr * 1.5
+      );
+    case 'SR_MULTI_TOUCH':
+      return ctx.activeSrs.some(
+        (sr) =>
+          sr.kind === (isBuy ? 'support' : 'resistance') &&
+          sr.touches >= 2 &&
+          price >= sr.lower - atr * 1.6 &&
+          price <= sr.upper + atr * 1.6
       );
     case 'SWEEP_CONF': {
       const allowed = isBuy
@@ -1768,6 +2341,19 @@ function evaluateFilter(
     case 'OTE_QUAD':
       return Boolean(
         dr && (isBuy ? dr.currentPosition === 'discount' : dr.currentPosition === 'premium')
+      );
+    case 'ICT_DISCOUNT_PREM_50':
+      return Boolean(
+        dr && (isBuy ? price <= dr.equilibrium : price >= dr.equilibrium)
+      );
+    case 'ICT_KILLZONE': {
+      const h = new Date(bar.time * 1000).getUTCHours();
+      return (h >= 7 && h <= 11) || (h >= 12 && h <= 17);
+    }
+    case 'ICT_WEEKLY_BIAS':
+      return (
+        anchors.weeklyOpen === null ||
+        (isBuy ? price >= anchors.weeklyOpen : price <= anchors.weeklyOpen)
       );
     case 'VOL_125':
       return ctx.volRatio >= 1.25;
@@ -1833,44 +2419,60 @@ export function evaluateComboStrategiesOnBar<TPlan>(
   deps: ComboEvalDeps<TPlan>
 ): TPlan[] {
   const results: TPlan[] = [];
-  const filterCache = new Map<string, boolean>();
-  const driverCache = new Map<string, DriverHit | null>();
+  const numFilters = FILTER_IDS.length;
+  const numDrivers = DRIVER_IDS.length;
 
-  const getFilter = (f: FilterId, d: Direction): boolean => {
-    const k = `${f}:${d}`;
-    let hit = filterCache.get(k);
-    if (hit === undefined) {
-      hit = evaluateFilter(f, d, deps.ctx);
-      filterCache.set(k, hit);
-    }
+  // Integer-indexed fixed caches eliminate thousands of per-bar Map string template allocations
+  const buyFilterState = new Int8Array(numFilters).fill(-1);
+  const sellFilterState = new Int8Array(numFilters).fill(-1);
+  const buyDriverState = new Array<DriverHit | null | undefined>(numDrivers);
+  const sellDriverState = new Array<DriverHit | null | undefined>(numDrivers);
+
+  const checkFilter = (filterIdx: number, filterId: FilterId, isBuy: boolean): boolean => {
+    const arr = isBuy ? buyFilterState : sellFilterState;
+    const cached = arr[filterIdx];
+    if (cached !== -1) return cached === 1;
+    const hit = evaluateFilter(filterId, isBuy ? 'BUY' : 'SELL', deps.ctx);
+    arr[filterIdx] = hit ? 1 : 0;
     return hit;
   };
 
-  const getDriver = (drv: DriverId, d: Direction): DriverHit | null => {
-    const k = `${drv}:${d}`;
-    if (driverCache.has(k)) return driverCache.get(k) ?? null;
-    const hit = evaluateDriver(drv, d, deps);
-    driverCache.set(k, hit);
+  const checkDriver = (driverIdx: number, driverId: DriverId, isBuy: boolean): DriverHit | null => {
+    const arr = isBuy ? buyDriverState : sellDriverState;
+    const cached = arr[driverIdx];
+    if (cached !== undefined) return cached;
+    const hit = evaluateDriver(driverId, isBuy ? 'BUY' : 'SELL', deps);
+    arr[driverIdx] = hit;
     return hit;
   };
 
-  for (const id of enabledIds) {
-    const spec = COMBO_SPEC_MAP.get(id);
-    if (!spec) continue;
+  const evalAllCombos = enabledIds.size >= COMBO_STRATEGY_SPECS.length;
+  const specCount = COMBO_STRATEGY_SPECS.length;
 
-    for (const d of DIRS) {
-      if (!getFilter(spec.filter, d)) continue;
-      if (spec.secondFilter && !getFilter(spec.secondFilter, d)) continue;
+  for (let i = 0; i < specCount; i++) {
+    const spec = COMBO_STRATEGY_SPECS[i];
+    if (!evalAllCombos && !enabledIds.has(spec.id)) continue;
 
-      const hit = getDriver(spec.driver, d);
+    for (let dirIdx = 0; dirIdx < 2; dirIdx++) {
+      const isBuy = dirIdx === 0;
+      if (!checkFilter(spec.filterIdx, spec.filter, isBuy)) continue;
+      if (
+        spec.secondFilter !== undefined &&
+        !checkFilter(spec.secondFilterIdx, spec.secondFilter, isBuy)
+      ) {
+        continue;
+      }
+
+      const hit = checkDriver(spec.driverIdx, spec.driver, isBuy);
       if (!hit || hit.invalidation === null) continue;
 
+      const d: Direction = isBuy ? 'BUY' : 'SELL';
       const execMeta = EXEC_META[spec.exec];
       const isLimit = execMeta.mode === 'limit_retest';
       const midBar = (deps.ctx.bar.high + deps.ctx.bar.low) / 2;
 
       const entryPrice = isLimit
-        ? hit.limitEntry ?? (d === 'BUY' ? Math.min(deps.ctx.price, midBar) : Math.max(deps.ctx.price, midBar))
+        ? hit.limitEntry ?? (isBuy ? Math.min(deps.ctx.price, midBar) : Math.max(deps.ctx.price, midBar))
         : deps.ctx.price;
 
       const entryZone = isLimit

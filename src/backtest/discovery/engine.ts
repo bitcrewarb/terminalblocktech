@@ -115,7 +115,7 @@ export function buildDefaultDiscoveryConfig(
  * Selects strategies deterministically based on scope:
  * - 'core': balanced ~125-strategy institutional suite (25 per category including base + dynamic/W/M/hybrid variants)
  * - 'category': all strategies matching requested categories
- * - 'all': complete 1,117+ strategy catalog
+ * - 'all': complete 3,200+ strategy catalog
  */
 export function selectDiscoveryStrategies(
   scope: DiscoveryStrategyScope,
@@ -318,7 +318,9 @@ export async function simulateSeriesForDiscovery(params: {
   strategies: BacktestStrategyDefinition[];
   config: DiscoveryScanConfig;
   technicalSettings?: TechnicalSettings;
+  includeFullResults?: boolean;
 }): Promise<SingleSeriesSimulationOutput> {
+  const includeFullResults = params.includeFullResults ?? true;
   const execCandles = normalizeDiscoveryCandles(params.execCandlesRaw).slice(
     -params.config.barsPerTimeframe
   );
@@ -367,7 +369,12 @@ export async function simulateSeriesForDiscovery(params: {
   const enabledSet = new Set<BacktestStrategyId>();
   for (const def of params.strategies) {
     enabledSet.add(def.id);
-    simulators.set(def.id, new StrategyPortfolioSimulator(def, btConfig, startTime));
+    simulators.set(
+      def.id,
+      new StrategyPortfolioSimulator(def, btConfig, startTime, {
+        trackEquityCurve: includeFullResults,
+      })
+    );
   }
 
   const techSettings = params.technicalSettings ?? DEFAULT_TECHNICAL_SETTINGS;
@@ -394,7 +401,7 @@ export async function simulateSeriesForDiscovery(params: {
   let evaluatedBars = 0;
 
   for (let i = warmupBars; i < execCandles.length; i++) {
-    if (i % 120 === 0) {
+    if (i % 60 === 0) {
       await yieldToEventLoop();
     }
 
@@ -527,9 +534,16 @@ export async function simulateSeriesForDiscovery(params: {
     ReturnType<StrategyPortfolioSimulator['buildResult']>
   >();
   for (const [id, sim] of simulators.entries()) {
-    const res = sim.buildResult();
-    fullResultsByStrategy.set(id, res);
-    tradesByStrategy.set(id, [...res.trades].sort((a, b) => a.signalTime - b.signalTime));
+    if (includeFullResults) {
+      const res = sim.buildResult();
+      fullResultsByStrategy.set(id, res);
+      tradesByStrategy.set(id, [...res.trades].sort((a, b) => a.signalTime - b.signalTime));
+    } else if (sim.getTradeCount() > 0) {
+      tradesByStrategy.set(
+        id,
+        sim.getTrades().sort((a, b) => a.signalTime - b.signalTime)
+      );
+    }
   }
 
   return {
@@ -1285,6 +1299,31 @@ export interface RunDiscoveryScanInput {
   }) => void;
 }
 
+function compareDiscoveryCombos(
+  a: StrategyDiscoveryCombination,
+  b: StrategyDiscoveryCombination
+): number {
+  const statusTier: Record<ValidationStatus, number> = {
+    Validated: 3,
+    'Preliminary Candidate': 2,
+    'Insufficient Evidence': 1,
+    'Failed Validation': 0,
+  };
+  const tDiff = statusTier[b.validationStatus] - statusTier[a.validationStatus];
+  if (tDiff !== 0) return tDiff;
+  if (b.oosScore !== a.oosScore) return b.oosScore - a.oosScore;
+  if (b.oosMetrics.expectancyR !== a.oosMetrics.expectancyR) {
+    return b.oosMetrics.expectancyR - a.oosMetrics.expectancyR;
+  }
+  const aPf = a.oosMetrics.profitFactor ?? 0;
+  const bPf = b.oosMetrics.profitFactor ?? 0;
+  if (bPf !== aPf) return bPf - aPf;
+  if (b.wfConsistencyPercent !== a.wfConsistencyPercent) {
+    return b.wfConsistencyPercent - a.wfConsistencyPercent;
+  }
+  return b.oosMetrics.trades - a.oosMetrics.trades;
+}
+
 export async function runDiscoveryOptimizationScan(
   input: RunDiscoveryScanInput
 ): Promise<DiscoveryScanRun> {
@@ -1304,8 +1343,14 @@ export async function runDiscoveryOptimizationScan(
   }
 
   const totalSteps = pairs.length + 1;
-  const seriesOutputs: SingleSeriesSimulationOutput[] = [];
   const marketCoverage: DiscoveryMarketCoverage[] = [];
+  const instrumentsScannedSet = new Set<InstrumentSymbol>();
+  const timeframesScannedSet = new Set<Timeframe>();
+
+  // Streaming top-K combination accumulator so raw series data is freed after each pair
+  let validatedAndPrelim: StrategyDiscoveryCombination[] = [];
+  let restBuffer: StrategyDiscoveryCombination[] = [];
+  const maxRows = 600;
 
   for (let idx = 0; idx < pairs.length; idx++) {
     const { symbol, timeframe } = pairs[idx];
@@ -1343,9 +1388,11 @@ export async function runDiscoveryOptimizationScan(
         strategies,
         config,
         technicalSettings: input.technicalSettings,
+        includeFullResults: false,
       });
 
-      seriesOutputs.push(simOut);
+      instrumentsScannedSet.add(symbol);
+      timeframesScannedSet.add(timeframe);
 
       const regimeDist = buildRegimeDistribution(
         simOut.regimeFeatures,
@@ -1369,6 +1416,24 @@ export async function runDiscoveryOptimizationScan(
         provider: execRes.provider,
         regimeDistribution: regimeDist,
       });
+
+      // Score immediately while simOut is hot, then allow GC to reclaim candles & raw trades
+      const pairCombos = buildDiscoveryCombinationsFromSeries([simOut], strategies, config);
+      for (const c of pairCombos) {
+        if (c.validationStatus === 'Validated' || c.validationStatus === 'Preliminary Candidate') {
+          validatedAndPrelim.push(c);
+        } else {
+          restBuffer.push(c);
+        }
+      }
+      if (validatedAndPrelim.length > maxRows * 2) {
+        validatedAndPrelim.sort(compareDiscoveryCombos);
+        validatedAndPrelim = validatedAndPrelim.slice(0, maxRows);
+      }
+      if (restBuffer.length > maxRows) {
+        restBuffer.sort(compareDiscoveryCombos);
+        restBuffer = restBuffer.slice(0, maxRows);
+      }
     } catch (err) {
       marketCoverage.push({
         symbol,
@@ -1402,7 +1467,18 @@ export async function runDiscoveryOptimizationScan(
     message: 'Scoring IS/OOS/Walk-Forward consistency and ranking Strategy + Instrument + Timeframe + Regime combinations...',
   });
 
-  const combinations = buildDiscoveryCombinationsFromSeries(seriesOutputs, strategies, config);
+  validatedAndPrelim.sort(compareDiscoveryCombos);
+  restBuffer.sort(compareDiscoveryCombos);
+
+  const kept =
+    validatedAndPrelim.length >= maxRows
+      ? validatedAndPrelim.slice(0, maxRows)
+      : [...validatedAndPrelim, ...restBuffer.slice(0, maxRows - validatedAndPrelim.length)];
+
+  const combinations = kept.map((c, idx) => ({
+    ...c,
+    rank: idx + 1,
+  }));
 
   let validatedCount = 0;
   let preliminaryCount = 0;
@@ -1428,8 +1504,8 @@ export async function runDiscoveryOptimizationScan(
       preliminaryCount,
       insufficientCount,
       failedCount,
-      instrumentsScanned: Array.from(new Set(seriesOutputs.map((s) => s.symbol))),
-      timeframesScanned: Array.from(new Set(seriesOutputs.map((s) => s.timeframe))),
+      instrumentsScanned: Array.from(instrumentsScannedSet),
+      timeframesScanned: Array.from(timeframesScannedSet),
     },
     combinations,
   };

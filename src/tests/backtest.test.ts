@@ -38,16 +38,23 @@ function aggregateCandles(candles: Candle[], step: number): Candle[] {
 }
 
 describe('Multi-Strategy SMC & Price Action Backtesting Engine', () => {
-  it('registers >=1117 unique institutional strategies across all 5 categories including W/M & dynamic engines', () => {
-    expect(BACKTEST_STRATEGY_DEFINITIONS.length).toBeGreaterThanOrEqual(1117);
+  it('registers >=3150 strictly non-duplicate institutional strategies across all 5 categories including ICT, SMC, PA, S/R & W/M engines', () => {
+    expect(BACKTEST_STRATEGY_DEFINITIONS.length).toBeGreaterThanOrEqual(3150);
 
     const ids = new Set(BACKTEST_STRATEGY_DEFINITIONS.map((d) => d.id));
     expect(ids.size).toBe(BACKTEST_STRATEGY_DEFINITIONS.length);
+
+    const names = new Set(BACKTEST_STRATEGY_DEFINITIONS.map((d) => d.name));
+    expect(names.size).toBe(BACKTEST_STRATEGY_DEFINITIONS.length);
 
     expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('CP_W_PATTERN'))).toBe(true);
     expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('CP_M_PATTERN'))).toBe(true);
     expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('DYN_ATR_EXPANSION'))).toBe(true);
     expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('PA_THREE_SOLDIERS_CROWS'))).toBe(true);
+    expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('ICT_SILVER_BULLET'))).toBe(true);
+    expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('ICT_UNICORN'))).toBe(true);
+    expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('SR_CONFLUENCE_CLUSTER'))).toBe(true);
+    expect(BACKTEST_STRATEGY_DEFINITIONS.some((d) => d.id.includes('PA_EXHAUSTION_SNAP'))).toBe(true);
 
     const byCategory = new Map<string, number>();
     for (const def of BACKTEST_STRATEGY_DEFINITIONS) {
@@ -57,14 +64,14 @@ describe('Multi-Strategy SMC & Price Action Backtesting Engine', () => {
       expect(def.riskRules.length).toBeGreaterThan(0);
     }
 
-    expect(byCategory.get('SMC')).toBeGreaterThanOrEqual(240);
-    expect(byCategory.get('Price Action')).toBeGreaterThanOrEqual(230);
-    expect(byCategory.get('Chart Patterns')).toBeGreaterThanOrEqual(220);
-    expect(byCategory.get('Support & Resistance')).toBeGreaterThanOrEqual(150);
-    expect(byCategory.get('Hybrid SMC/PA')).toBeGreaterThanOrEqual(200);
+    expect(byCategory.get('SMC')).toBeGreaterThanOrEqual(800);
+    expect(byCategory.get('Price Action')).toBeGreaterThanOrEqual(750);
+    expect(byCategory.get('Chart Patterns')).toBeGreaterThanOrEqual(450);
+    expect(byCategory.get('Support & Resistance')).toBeGreaterThanOrEqual(550);
+    expect(byCategory.get('Hybrid SMC/PA')).toBeGreaterThanOrEqual(600);
   });
 
-  it('evaluates all 1100+ strategies causally on real BTCUSDT 15m data with strict zero lookahead', () => {
+  it('evaluates all 3,200+ strategies causally on real BTCUSDT 15m data with strict zero lookahead', () => {
     const htfCandles = aggregateCandles(execCandles, 4); // 1H higher timeframe
     const config = buildDefaultBacktestConfig({
       symbol: 'BTCUSDT',

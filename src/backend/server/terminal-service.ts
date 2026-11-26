@@ -7,7 +7,7 @@ import {
 import {
   buildDefaultBacktestConfig,
   resolveDefaultHtfTimeframe,
-  runMultiStrategyBacktest,
+  runMultiStrategyBacktestAsync,
 } from '../../backtest/engine.ts';
 import { BacktestSqliteStore } from '../../backtest/storage/sqlite.ts';
 import {
@@ -695,7 +695,7 @@ export class TerminalService {
       this.marketData.fetchRawHistory(config.symbol, '1D', dailyFetchBars).catch(() => [] as Candle[]),
     ]);
 
-    const result = runMultiStrategyBacktest({
+    const result = await runMultiStrategyBacktestAsync({
       config,
       execCandles,
       htfCandles,
@@ -705,7 +705,11 @@ export class TerminalService {
     });
 
     if (options.persist !== false) {
-      this.backtestStore.saveRun(result);
+      try {
+        this.backtestStore.saveRun(result);
+      } catch (err) {
+        console.warn('[Backtest] Archive persistence warning:', err instanceof Error ? err.message : err);
+      }
     }
     return result;
   }
@@ -822,7 +826,14 @@ export class TerminalService {
           },
         });
 
-        this.backtestStore.saveDiscoveryRun(run);
+        try {
+          this.backtestStore.saveDiscoveryRun(run);
+        } catch (persistErr) {
+          console.warn(
+            '[Discovery] Archive persistence warning:',
+            persistErr instanceof Error ? persistErr.message : persistErr
+          );
+        }
         this.discoveryProgress = {
           ...this.discoveryProgress,
           status: 'completed',

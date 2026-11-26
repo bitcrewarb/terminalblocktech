@@ -10,9 +10,10 @@ import { TerminalService } from './terminal-service.ts';
 export async function startTerminalServer(): Promise<void> {
   const app = express();
   const httpServer = http.createServer(app);
+  httpServer.requestTimeout = 300000;
   const service = new TerminalService();
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '4mb' }));
   app.use('/api', createApiRouter(service));
   app.use(errorMiddleware);
 

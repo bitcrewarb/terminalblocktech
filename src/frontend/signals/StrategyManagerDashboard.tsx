@@ -35,6 +35,7 @@ import type {
 } from '../../shared/types/index.ts';
 import { apiFetch } from '../state/api-client.ts';
 import { useTerminal } from '../state/terminal-context.tsx';
+import { StrategyWinRateHistoryChart } from './StrategyWinRateHistoryChart.tsx';
 
 type ArmingState = 'FIRING' | 'MONITORING' | 'PAUSED' | 'UNARMED';
 type StatusFilter = 'ALL' | 'FIRING' | 'MONITORING' | 'PAUSED' | 'UNARMED';
@@ -168,6 +169,7 @@ export function StrategyManagerDashboard({
     evaluateSignals,
     evaluatingSignals,
     discoveryProgress,
+    timezone,
     selectSymbol,
     selectTimeframe,
     focusChartObject,
@@ -685,15 +687,6 @@ export function StrategyManagerDashboard({
     }
   };
 
-  const maxChartWinRate = 100;
-  const comparativeBars = useMemo(
-    () =>
-      [...armedRows]
-        .sort((a, b) => (b.oosScore ?? b.oosWinRate ?? 0) - (a.oosScore ?? a.oosWinRate ?? 0))
-        .slice(0, 10),
-    [armedRows]
-  );
-
   const containerClass =
     variant === 'page'
       ? 'flex-1 overflow-y-auto bg-[#0B0E14] px-4 py-4 sm:px-6'
@@ -941,102 +934,18 @@ export function StrategyManagerDashboard({
               </section>
             ) : (
               <>
-                {/* Visual Side-by-Side Performance Comparison across Armed Strategies */}
-                {comparativeBars.length > 0 && (
-                  <section className="border border-[#222938] bg-[#12161F] p-4 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1D2432] pb-2">
-                      <div>
-                        <h2 className="text-xs font-semibold text-[#E6EDF3]">
-                          Armed Strategy Performance Comparison ({comparativeBars.length})
-                        </h2>
-                        <p className="text-[11px] text-[#8B949E]">
-                          Ranked by OOS validation score &amp; win rate. Click any bar row to inspect strategy rules and live signals.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 font-mono text-[10px] text-[#8B949E]">
-                        <span>Bar = OOS Win %</span>
-                        <span>·</span>
-                        <span>Right = PF / Expectancy / OOS Score</span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {comparativeBars.map((row, idx) => {
-                        const pct = Math.max(0, Math.min(maxChartWinRate, row.oosWinRate ?? 0));
-                        const isFiring = row.armingState === 'FIRING';
-                        return (
-                          <button
-                            key={`bar-${row.rowKey}`}
-                            type="button"
-                            onClick={() =>
-                              setExpandedKey((k) => (k === row.rowKey ? null : row.rowKey))
-                            }
-                            className={`flex flex-col gap-1.5 border px-3 py-2 text-left transition-colors cursor-pointer ${
-                              expandedKey === row.rowKey
-                                ? 'border-[#38BDF8] bg-[#161B26]'
-                                : 'border-[#1D2432] bg-[#0B0E14] hover:border-[#2B3548]'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2 text-[11px]">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-mono text-[10px] text-[#8B949E] tabular-nums">
-                                  {String(idx + 1).padStart(2, '0')}.
-                                </span>
-                                <span className="truncate font-medium text-[#E6EDF3]">
-                                  {row.strategy.name}
-                                </span>
-                              </div>
-                              <span
-                                className={`font-mono text-[10px] whitespace-nowrap shrink-0 ${
-                                  isFiring
-                                    ? 'font-semibold text-[#0ECB81]'
-                                    : row.armingState === 'PAUSED'
-                                      ? 'text-[#F59E0B]'
-                                      : 'text-[#38BDF8]'
-                                }`}
-                              >
-                                {row.symbol} {row.timeframe}
-                                {isFiring ? ` · ${row.liveOpenSignals.length} LIVE` : ''}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 flex-1 bg-[#161B26] overflow-hidden">
-                                <div
-                                  className={`h-full ${
-                                    isFiring
-                                      ? 'bg-[#0ECB81]'
-                                      : (row.oosWinRate ?? 0) >= 55
-                                        ? 'bg-[#38BDF8]'
-                                        : (row.oosWinRate ?? 0) >= 45
-                                          ? 'bg-[#F59E0B]'
-                                          : 'bg-[#6E7681]'
-                                  }`}
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
-                              <div className="flex items-center gap-2 font-mono text-[10px] text-[#C9D1D9] tabular-nums shrink-0">
-                                <span>
-                                  {row.oosWinRate !== null ? `${row.oosWinRate.toFixed(1)}%` : '—'}
-                                </span>
-                                <span className="text-[#4B5563]">·</span>
-                                <span>
-                                  PF{' '}
-                                  {row.oosProfitFactor !== null
-                                    ? row.oosProfitFactor.toFixed(2)
-                                    : '—'}
-                                </span>
-                                <span className="text-[#4B5563]">·</span>
-                                <span className="text-[#8B949E]">
-                                  {row.oosScore !== null ? `Score ${row.oosScore.toFixed(0)}` : 'Catalog'}
-                                </span>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
+                {/* 30-Day Historical Win Rate Chart (Recharts) */}
+                {armedSlots.length > 0 && (
+                  <StrategyWinRateHistoryChart
+                    armedSlots={armedSlots}
+                    signals={signals}
+                    timezone={timezone}
+                    selectedRowKey={expandedKey}
+                    onSelectStrategyRow={(rowKey) =>
+                      setExpandedKey((k) => (k === rowKey ? null : rowKey))
+                    }
+                    onOpenDiscovery={onOpenDiscovery}
+                  />
                 )}
 
                 {/* Filter Controls & Full Strategy Matrix */}

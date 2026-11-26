@@ -190,6 +190,7 @@ export function StrategyDiscoveryPage({
   const [minRiskReward, setMinRiskReward] = useState<number>(1.5);
   const [minOosTrades, setMinOosTrades] = useState<number>(4);
   const [presetNotice, setPresetNotice] = useState<string | null>(null);
+  const [catalogStrategyCount, setCatalogStrategyCount] = useState<number>(3300);
 
   // Saved runs & current loaded run
   const [runs, setRuns] = useState<DiscoveryRunSummary[]>([]);
@@ -258,6 +259,14 @@ export function StrategyDiscoveryPage({
 
   useEffect(() => {
     void refreshArchive(true);
+    void apiFetch('/api/backtest/strategies')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { strategies?: unknown[] } | null) => {
+        if (d?.strategies && d.strategies.length > 0) {
+          setCatalogStrategyCount(d.strategies.length);
+        }
+      })
+      .catch(() => {});
   }, [refreshArchive]);
 
   // Sync WebSocket progress updates from context
@@ -318,7 +327,7 @@ export function StrategyDiscoveryPage({
     setMinRiskReward(1.5);
     setMinOosTrades(8);
     setPresetNotice(
-      'Max-Accuracy settings applied (4 Assets × 4 Timeframes · up to 20,000 candles · All 1,169+ strategies · Min 8 unseen test trades). Click "Run Discovery Scan" to start.'
+      `Max-Accuracy settings applied (4 Assets × 4 Timeframes · up to 20,000 candles · All ${catalogStrategyCount.toLocaleString()} strategies · Min 8 unseen test trades). Click "Run Discovery Scan" to start.`
     );
   };
 
@@ -1113,7 +1122,7 @@ export function StrategyDiscoveryPage({
                 >
                   <option value="core">Best Core Suite (~125)</option>
                   <option value="category">Single Category Sweep</option>
-                  <option value="all">All 1,117+ Strategies</option>
+                  <option value="all">All {catalogStrategyCount.toLocaleString()} Strategies</option>
                 </select>
                 {strategyScope === 'category' && (
                   <select

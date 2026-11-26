@@ -40,6 +40,7 @@ export class BacktestSqliteStore {
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
+      PRAGMA busy_timeout = 5000;
 
       CREATE TABLE IF NOT EXISTS backtest_runs (
         id TEXT PRIMARY KEY,
@@ -127,6 +128,10 @@ export class BacktestSqliteStore {
       strategyCount: run.strategies.length,
       payloadJson: JSON.stringify(run),
     });
+    this.db.exec(`
+      DELETE FROM backtest_runs
+      WHERE id NOT IN (SELECT id FROM backtest_runs ORDER BY created_at DESC LIMIT 25)
+    `);
     this.cachedBacktestRuns = null;
   }
 
@@ -277,6 +282,10 @@ export class BacktestSqliteStore {
         topComboOosReturnPercent: top?.oosMetrics.netReturnPercent ?? null,
         payloadJson: JSON.stringify(run),
       });
+    this.db.exec(`
+      DELETE FROM discovery_runs
+      WHERE id NOT IN (SELECT id FROM discovery_runs ORDER BY created_at DESC LIMIT 15)
+    `);
     this.cachedDiscoveryRuns = null;
   }
 

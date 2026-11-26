@@ -65,10 +65,41 @@ function getTpWeights(count: number): number[] {
   return [0.4, 0.35, 0.25];
 }
 
+export interface SimulatorOptions {
+  trackEquityCurve?: boolean;
+}
+
+function compressEquityPoints(points: BacktestEquityPoint[], targetPoints = 76): BacktestEquityPoint[] {
+  const n = points.length;
+  if (n <= targetPoints) return points;
+
+  let peakEqIdx = 0;
+  let worstDdIdx = 0;
+  for (let i = 0; i < n; i++) {
+    if (points[i].equity > points[peakEqIdx].equity) peakEqIdx = i;
+    if (points[i].drawdownPercent > points[worstDdIdx].drawdownPercent) worstDdIdx = i;
+  }
+
+  const keepIndices = new Set<number>([0, n - 1, peakEqIdx, worstDdIdx]);
+  const step = (n - 1) / Math.max(2, targetPoints - 4);
+  for (let k = 1; k < targetPoints - 3; k++) {
+    const idx = Math.min(n - 2, Math.max(1, Math.round(k * step)));
+    keepIndices.add(idx);
+  }
+
+  const sorted = Array.from(keepIndices).sort((a, b) => a - b);
+  const out: BacktestEquityPoint[] = new Array(sorted.length);
+  for (let i = 0; i < sorted.length; i++) {
+    out[i] = points[sorted[i]];
+  }
+  return out;
+}
+
 export class StrategyPortfolioSimulator {
   public readonly definition: BacktestStrategyDefinition;
   private readonly config: BacktestConfig;
   private readonly precision: number;
+  private readonly trackEquityCurve: boolean;
 
   private equity: number;
   private peakEquity: number;
@@ -76,20 +107,47 @@ export class StrategyPortfolioSimulator {
   private active: ActivePosition | null = null;
   private tradeCounter = 0;
 
-  private readonly trades: BacktestTradeRecord[] = [];
-  private readonly equityCurve: BacktestEquityPoint[] = [];
+  // O(1) incremental drawdown & return statistics (exact across 20,000+ bars without keeping every point)
+  private runningMaxDdDollar = 0;
+  private runningMaxDdPct = 0;
+  private prevMarkEquity: number;
+  private retCount = 0;
+  private retSum = 0;
+  private retSumSq = 0;
+  private downsideSumSq = 0;
 
-  constructor(definition: BacktestStrategyDefinition, config: BacktestConfig, startTime: number) {
+  private readonly trades: BacktestTradeRecord[] = [];
+  private equityCurve: BacktestEquityPoint[] = [];
+
+  constructor(
+    definition: BacktestStrategyDefinition,
+    config: BacktestConfig,
+    startTime: number,
+    options?: SimulatorOptions
+  ) {
     this.definition = definition;
     this.config = config;
     this.precision = getInstrumentMeta(config.symbol).pricePrecision;
+    this.trackEquityCurve = options?.trackEquityCurve ?? true;
     this.equity = config.initialCapital;
     this.peakEquity = config.initialCapital;
-    this.equityCurve.push({
-      time: startTime,
-      equity: roundNum(this.equity, 2),
-      drawdownPercent: 0,
-    });
+    this.prevMarkEquity = roundNum(this.equity, 2);
+
+    if (this.trackEquityCurve) {
+      this.equityCurve.push({
+        time: startTime,
+        equity: this.prevMarkEquity,
+        drawdownPercent: 0,
+      });
+    }
+  }
+
+  public getTradeCount(): number {
+    return this.trades.length;
+  }
+
+  public getTrades(): BacktestTradeRecord[] {
+    return [...this.trades];
   }
 
   public hasOpenOrPending(): boolean {
@@ -117,7 +175,7 @@ export class StrategyPortfolioSimulator {
       this.processPendingOrderOnBar(bar, barIndex);
     }
 
-    // 3. Track mark-to-market equity point on curve (sampled cleanly)
+    // 3. Track mark-to-market equity stats in O(1) and optionally keep compressed curve
     let markEquity = this.equity;
     if (this.active) {
       const isBuy = this.active.candidate.direction === 'BUY';
@@ -126,14 +184,36 @@ export class StrategyPortfolioSimulator {
         : (this.active.effectiveEntryPrice - bar.close) * this.active.unitsRemaining;
       markEquity = Math.max(0, this.equity + unrealized);
     }
-    this.peakEquity = Math.max(this.peakEquity, markEquity);
-    const ddPct = this.peakEquity > 0 ? ((this.peakEquity - markEquity) / this.peakEquity) * 100 : 0;
+    const roundedMark = roundNum(markEquity, 2);
+    if (roundedMark > this.peakEquity) {
+      this.peakEquity = roundedMark;
+    }
+    const ddDollar = Math.max(0, this.peakEquity - roundedMark);
+    const ddPct = this.peakEquity > 0 ? (ddDollar / this.peakEquity) * 100 : 0;
+    if (ddDollar > this.runningMaxDdDollar) this.runningMaxDdDollar = ddDollar;
+    if (ddPct > this.runningMaxDdPct) this.runningMaxDdPct = ddPct;
 
-    this.equityCurve.push({
-      time: bar.time,
-      equity: roundNum(markEquity, 2),
-      drawdownPercent: roundNum(ddPct, 2),
-    });
+    if (this.prevMarkEquity > 0) {
+      const r = (roundedMark - this.prevMarkEquity) / this.prevMarkEquity;
+      this.retCount += 1;
+      this.retSum += r;
+      this.retSumSq += r * r;
+      if (r < 0) {
+        this.downsideSumSq += r * r;
+      }
+    }
+    this.prevMarkEquity = roundedMark;
+
+    if (this.trackEquityCurve) {
+      this.equityCurve.push({
+        time: bar.time,
+        equity: roundedMark,
+        drawdownPercent: roundNum(ddPct, 2),
+      });
+      if (this.equityCurve.length >= 160) {
+        this.equityCurve = compressEquityPoints(this.equityCurve, 74);
+      }
+    }
   }
 
   private processPendingOrderOnBar(bar: Candle, barIndex: number): void {
@@ -423,13 +503,31 @@ export class StrategyPortfolioSimulator {
         'END_OF_DATA',
         `Marked-to-market at end of backtest window @ ${lastBar.close.toFixed(this.precision)}`
       );
-      this.peakEquity = Math.max(this.peakEquity, this.equity);
-      const ddPct = this.peakEquity > 0 ? ((this.peakEquity - this.equity) / this.peakEquity) * 100 : 0;
-      this.equityCurve.push({
-        time: lastBar.time,
-        equity: roundNum(this.equity, 2),
-        drawdownPercent: roundNum(ddPct, 2),
-      });
+      const roundedEq = roundNum(this.equity, 2);
+      if (roundedEq > this.peakEquity) this.peakEquity = roundedEq;
+      const ddDollar = Math.max(0, this.peakEquity - roundedEq);
+      const ddPct = this.peakEquity > 0 ? (ddDollar / this.peakEquity) * 100 : 0;
+      if (ddDollar > this.runningMaxDdDollar) this.runningMaxDdDollar = ddDollar;
+      if (ddPct > this.runningMaxDdPct) this.runningMaxDdPct = ddPct;
+      if (this.prevMarkEquity > 0) {
+        const r = (roundedEq - this.prevMarkEquity) / this.prevMarkEquity;
+        this.retCount += 1;
+        this.retSum += r;
+        this.retSumSq += r * r;
+        if (r < 0) this.downsideSumSq += r * r;
+      }
+      this.prevMarkEquity = roundedEq;
+
+      if (this.trackEquityCurve) {
+        this.equityCurve.push({
+          time: lastBar.time,
+          equity: roundedEq,
+          drawdownPercent: roundNum(ddPct, 2),
+        });
+      }
+    }
+    if (this.trackEquityCurve && this.equityCurve.length > 80) {
+      this.equityCurve = compressEquityPoints(this.equityCurve, 78);
     }
   }
 
@@ -484,28 +582,14 @@ export class StrategyPortfolioSimulator {
     const worstTradeR =
       total > 0 ? roundNum(Math.min(...this.trades.map((t) => t.realizedR)), 2) : 0;
 
-    // Max Drawdown $ & % from equity curve
-    let peak = startCap;
-    let maxDdDollar = 0;
-    let maxDdPct = 0;
-    for (const pt of this.equityCurve) {
-      if (pt.equity > peak) peak = pt.equity;
-      const ddD = peak - pt.equity;
-      const ddP = peak > 0 ? (ddD / peak) * 100 : 0;
-      if (ddD > maxDdDollar) maxDdDollar = ddD;
-      if (ddP > maxDdPct) maxDdPct = ddP;
-    }
+    // Max Drawdown $ & % tracked causally across every bar in O(1)
+    const maxDdDollar = this.runningMaxDdDollar;
+    const maxDdPct = this.runningMaxDdPct;
 
     const recoveryFactor =
       maxDdDollar > 0 ? roundNum(netProfit / maxDdDollar, 2) : netProfit > 0 ? 99.9 : null;
 
-    // Sharpe & Sortino from per-bar equity returns
-    const barReturns: number[] = [];
-    for (let i = 1; i < this.equityCurve.length; i++) {
-      const prev = this.equityCurve[i - 1].equity;
-      const curr = this.equityCurve[i].equity;
-      if (prev > 0) barReturns.push((curr - prev) / prev);
-    }
+    // Sharpe & Sortino from per-bar equity returns accumulated in O(1)
     const tfSec = TIMEFRAME_SECONDS[this.config.timeframe] || 900;
     const isCrypto = this.config.symbol === 'BTCUSDT' || this.config.symbol === 'ETHUSDT';
     const tradingDaysPerYear = isCrypto ? 365 : 252;
@@ -513,19 +597,15 @@ export class StrategyPortfolioSimulator {
 
     let sharpeRatio = 0;
     let sortinoRatio = 0;
-    if (barReturns.length > 5 && total >= 2) {
-      const mean = barReturns.reduce((s, r) => s + r, 0) / barReturns.length;
-      const variance =
-        barReturns.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / barReturns.length;
+    if (this.retCount > 5 && total >= 2) {
+      const mean = this.retSum / this.retCount;
+      const variance = Math.max(0, this.retSumSq / this.retCount - mean * mean);
       const stdDev = Math.sqrt(variance);
       if (stdDev > 1e-9) {
         sharpeRatio = roundNum((mean / stdDev) * Math.sqrt(barsPerYear), 2);
       }
-      const downsideSquares = barReturns.filter((r) => r < 0).map((r) => r * r);
       const downDev =
-        downsideSquares.length > 0
-          ? Math.sqrt(downsideSquares.reduce((s, v) => s + v, 0) / barReturns.length)
-          : 0;
+        this.downsideSumSq > 0 ? Math.sqrt(this.downsideSumSq / this.retCount) : 0;
       if (downDev > 1e-9) {
         sortinoRatio = roundNum((mean / downDev) * Math.sqrt(barsPerYear), 2);
       } else if (mean > 0) {
@@ -656,33 +736,10 @@ export class StrategyPortfolioSimulator {
             ? 'Marginal Positive'
             : 'Unprofitable on Window';
 
-    let sampledCurve = this.equityCurve;
-    if (this.equityCurve.length > 80) {
-      const step = Math.ceil(this.equityCurve.length / 74);
-      const out: BacktestEquityPoint[] = [];
-      let peakEqIdx = 0;
-      let worstDdIdx = 0;
-      for (let i = 0; i < this.equityCurve.length; i++) {
-        if (this.equityCurve[i].equity > this.equityCurve[peakEqIdx].equity) {
-          peakEqIdx = i;
-        }
-        if (this.equityCurve[i].drawdownPercent > this.equityCurve[worstDdIdx].drawdownPercent) {
-          worstDdIdx = i;
-        }
-      }
-      for (let i = 0; i < this.equityCurve.length; i++) {
-        if (
-          i === 0 ||
-          i === this.equityCurve.length - 1 ||
-          i === peakEqIdx ||
-          i === worstDdIdx ||
-          i % step === 0
-        ) {
-          out.push(this.equityCurve[i]);
-        }
-      }
-      sampledCurve = out;
-    }
+    const sampledCurve =
+      this.equityCurve.length > 80
+        ? compressEquityPoints(this.equityCurve, 78)
+        : this.equityCurve;
 
     return {
       strategy: this.definition,

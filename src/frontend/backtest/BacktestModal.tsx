@@ -89,7 +89,7 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
   const [leaderboardCategory, setLeaderboardCategory] = useState<CategoryFilter>('ALL');
   const [leaderboardQuery, setLeaderboardQuery] = useState<string>('');
   const [activeOnlyLeaderboard, setActiveOnlyLeaderboard] = useState<boolean>(false);
-  const [leaderboardShowAll, setLeaderboardShowAll] = useState<boolean>(false);
+  const [leaderboardLimit, setLeaderboardLimit] = useState<number>(150);
 
   const [savedRuns, setSavedRuns] = useState<BacktestRunSummary[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
@@ -126,6 +126,8 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
     setRunning(true);
     setErrorMsg(null);
     try {
+      const allSelected =
+        strategyDefs.length > 0 && selectedStrategyIds.length >= strategyDefs.length;
       const payload: Partial<BacktestConfig> = {
         symbol: btSymbol,
         timeframe: btTimeframe,
@@ -137,7 +139,10 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
         commissionBps,
         slippageBps,
         moveStopToBreakevenAfterTp1: breakevenAfterTp1,
-        strategyIds: selectedStrategyIds.length > 0 ? selectedStrategyIds : undefined,
+        strategyIds:
+          selectedStrategyIds.length > 0 && !allSelected
+            ? selectedStrategyIds
+            : undefined,
       };
       const res = await apiFetch('/api/backtest/run', {
         method: 'POST',
@@ -153,6 +158,7 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
       setInspectedStrategyId(run.bestStrategyId ?? run.strategies[0]?.strategy.id ?? null);
       setExpandedTradeId(null);
       setTradeFilter('ALL');
+      setLeaderboardLimit(150);
       setTab('lab');
 
       // Refresh SQLite archive list
@@ -835,16 +841,16 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
                 <div className="border border-[#222938] bg-[#0B0E14] p-8 text-center space-y-3">
                   <FlaskConical className="mx-auto h-8 w-8 text-[#38BDF8]" />
                   <h3 className="text-sm font-semibold text-[#E6EDF3]">
-                    Ready to Generate & Backtest {strategyDefs.length || 1150}+ Institutional Strategies
+                    Ready to Generate & Backtest {strategyDefs.length || 3200}+ Institutional Strategies
                   </h3>
                   <p className="mx-auto max-w-2xl text-xs text-[#8B949E] leading-relaxed">
                     Click <strong className="text-[#0ECB81]">Start Backtest</strong> above to
-                    accurately evaluate {strategyDefs.length || 1150} causal strategy combinations spanning
-                    Smart Money Concepts ({pickerCategoryCounts['SMC'] || 260}), Price Action &amp;
-                    Candlestick Models ({pickerCategoryCounts['Price Action'] || 260}), W/M &amp; Chart
-                    Patterns ({pickerCategoryCounts['Chart Patterns'] || 245}), Support &amp;
-                    Resistance / Pivots ({pickerCategoryCounts['Support & Resistance'] || 170}), and
-                    Dynamic Multi-Pillar Hybrids ({pickerCategoryCounts['Hybrid SMC/PA'] || 225}) against real
+                    accurately evaluate {strategyDefs.length || 3200} causal strategy combinations spanning
+                    Smart Money &amp; ICT Concepts ({pickerCategoryCounts['SMC'] || 850}), Price Action &amp;
+                    Candlestick Models ({pickerCategoryCounts['Price Action'] || 800}), W/M &amp; Chart
+                    Patterns ({pickerCategoryCounts['Chart Patterns'] || 480}), Support &amp;
+                    Resistance / Pivots ({pickerCategoryCounts['Support & Resistance'] || 600}), and
+                    Dynamic Multi-Pillar Hybrids ({pickerCategoryCounts['Hybrid SMC/PA'] || 650}) against real
                     historical {btSymbol} {btTimeframe} bars with zero lookahead.
                   </p>
                 </div>
@@ -1004,10 +1010,7 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
                               </td>
                             </tr>
                           ) : (
-                            (leaderboardShowAll
-                              ? filteredLeaderboard
-                              : filteredLeaderboard.slice(0, 150)
-                            ).map((res) => {
+                            filteredLeaderboard.slice(0, leaderboardLimit).map((res) => {
                               const isSelected = selectedResult?.strategy.id === res.strategy.id;
                               const m = res.metrics;
                               const pos = m.netProfit >= 0;
@@ -1094,14 +1097,14 @@ export function BacktestModal({ onClose }: { onClose: () => void }) {
                           )}
                         </tbody>
                       </table>
-                      {!leaderboardShowAll && filteredLeaderboard.length > 150 && (
-                        <div className="flex items-center justify-center border-t border-[#1D2432] bg-[#0E121A] py-2">
+                      {filteredLeaderboard.length > leaderboardLimit && (
+                        <div className="flex items-center justify-center gap-2 border-t border-[#1D2432] bg-[#0E121A] py-2">
                           <button
                             type="button"
-                            onClick={() => setLeaderboardShowAll(true)}
+                            onClick={() => setLeaderboardLimit((n) => n + 250)}
                             className="border border-[#222938] bg-[#12161F] px-3 py-1 text-[11px] text-[#38BDF8] hover:border-[#38BDF8] cursor-pointer"
                           >
-                            Show All {filteredLeaderboard.length} Ranked Strategies (Showing Top 150)
+                            Load +250 More (Showing {Math.min(leaderboardLimit, filteredLeaderboard.length)} of {filteredLeaderboard.length})
                           </button>
                         </div>
                       )}
